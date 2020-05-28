@@ -19,7 +19,6 @@
 
 (defpackage :serialization-format
   (:use :cl)
-  (:nicknames :fmt)
   (:export
    :id
    :reference-id
@@ -42,9 +41,9 @@
    :object-class-name
    :object-package-name))
 
-(defpackage :marshal
+(uiop:define-package :marshal
   (:use :cl)
-  (:nicknames :ms)
+  (:local-nicknames (:fmt :serialization-format))
   (:export
    :*idiom-table*
    :marshal

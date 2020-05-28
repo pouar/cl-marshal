@@ -14,7 +14,10 @@
 ;;; ***********************************************************
 
 (in-package :cl-user)
-
+(uiop:define-package :marshal-tests
+  (:use :cl-user)
+  (:local-nicknames (:ms :marshal)))
+(in-package :marshal-tests)
 #-allegro
 (require :marshal)
 

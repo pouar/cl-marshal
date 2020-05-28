@@ -36,8 +36,7 @@ need to be pairs of slot and accessors."))
 
 (defmethod initialize-instance :after ((self persist-hashtable) &rest initargs)
   (declare (ignore initargs))
-  (setf (hashtable self) (make-hash-table :test #'eq :size 50 :rehash-size 1.5))
-  )
+  (setf (hashtable self) (make-hash-table :test #'eq :size 50 :rehash-size 1.5)))
 
 
 (defgeneric genkey (self))
@@ -45,7 +44,6 @@ need to be pairs of slot and accessors."))
 
 (defmethod genkey ((self persist-hashtable))
   (incf (next-key self)))
-;   (setf (next-key self) (1+ (next-key self))))
 
 
 (defgeneric getvalue (self key))
@@ -65,8 +63,7 @@ need to be pairs of slot and accessors."))
 
 (defgeneric marshal (thing &optional circle-hash)
   (:documentation "Generates an sexp when called with an object. The sexp can be used
-to send it over a network or to store it in a database etc.")
-  )
+to send it over a network or to store it in a database etc."))
 
 
 (defmethod marshal (thing &optional (circle-hash nil))
@@ -96,20 +93,21 @@ to send it over a network or to store it in a database etc.")
             (setq dummy (genkey circle-hash))
             (setvalue circle-hash object dummy)
             (setf outlist (list (coding-idiom :object)
-				dummy
-				(class-name class)
-				(intern (package-name (symbol-package (class-name class)))
-					:keyword)))
+                                dummy
+                                (class-name class)
+                                (intern (package-name (symbol-package (class-name class)))
+                                        :keyword)))
             (dolist (walker pslots)
               (setq outlist
-		    (nconc outlist
-			   (list (marshal (slot-value object walker)
-					  circle-hash))))))))
+                    (nconc outlist
+                           (list walker
+                                 (marshal (slot-value object walker)
+                                          circle-hash))))))))
     outlist))
 
 (defun %walk-list (sequence output ckey key-idiom circle-hash)
   (loop for walker in sequence
-     do (setf output (nconc output (list (marshal walker circle-hash)))))
+        do (setf output (nconc output (list (marshal walker circle-hash)))))
   (push ckey output)
   (push (coding-idiom key-idiom) output))
 
@@ -117,10 +115,10 @@ to send it over a network or to store it in a database etc.")
 (defmethod marshal ((list list) &optional (circle-hash nil))
   (let* ((ckey nil)
          (output nil)
-	 (circular-list-p (utils:circular-list-p list))
+         (circular-list-p (utils:circular-list-p list))
          (dotted-list-p   (and (not circular-list-p)
-			       (rest (last list)))))
-    ; ========= circle-stuff
+                               (rest (last list)))))
+    ;; ========= circle-stuff
     (setf ckey (getvalue circle-hash list))
     (if ckey
         (setq output (list (coding-idiom :reference) ckey))
@@ -128,29 +126,29 @@ to send it over a network or to store it in a database etc.")
           (setq ckey (genkey circle-hash))
           (setvalue circle-hash list ckey)
           (cond
-	    (dotted-list-p
-	     (setf output (nconc output (list (marshal (car list) circle-hash)
-					      (marshal (cdr list) circle-hash))))
-	     (push ckey output)
-	     (push (coding-idiom :dlist) output))
-	    (circular-list-p
-	     (let* ((*print-circle* t)
-		    (flat (do* ((stopper list)
-				(tail    (rest list) (rest tail))
-				(results (list (first stopper))))
-			       ((eq stopper tail) (reverse results))
-			    ;;(format t "~a stopper ~a ~%"  tail stopper)
-			    (push (first tail) results))))
+            (dotted-list-p
+             (setf output (nconc output (list (marshal (car list) circle-hash)
+                                              (marshal (cdr list) circle-hash))))
+             (push ckey output)
+             (push (coding-idiom :dlist) output))
+            (circular-list-p
+             (let* ((*print-circle* t)
+                    (flat (do* ((stopper list)
+                                (tail    (rest list) (rest tail))
+                                (results (list (first stopper))))
+                              ((eq stopper tail) (reverse results))
+                            ;;(format t "~a stopper ~a ~%"  tail stopper)
+                            (push (first tail) results))))
 
-	       (loop for walker in flat
-		  do (setf output (nconc output (list (marshal walker circle-hash)))))
-	       (push ckey output)
-	       (push (coding-idiom :circular-list) output)))
-	    (t ;; proper list
-	     (loop for walker in list
-                do (setf output (nconc output (list (marshal walker circle-hash)))))
-	     (push ckey output)
-	     (push (coding-idiom :list) output)))))
+               (loop for walker in flat
+                     do (setf output (nconc output (list (marshal walker circle-hash)))))
+               (push ckey output)
+               (push (coding-idiom :circular-list) output)))
+            (t ;; proper list
+             (loop for walker in list
+                   do (setf output (nconc output (list (marshal walker circle-hash)))))
+             (push ckey output)
+             (push (coding-idiom :list) output)))))
     output))
 
 
@@ -169,7 +167,10 @@ to send it over a network or to store it in a database etc.")
           (setq ckey (genkey circle-hash))
           (setvalue circle-hash array ckey)
           (setq output (list (coding-idiom :array) ckey
-                             (array-dimensions array) (array-element-type array)))
+                             (array-dimensions array) (array-element-type array)
+                             (when (array-has-fill-pointer-p array)
+                               (fill-pointer array))
+                             (adjustable-array-p array)))
           (dotimes (walker (array-total-size array))
             (push (marshal (row-major-aref array walker) circle-hash) dummy))
           (setq output (nconc output (list (nreverse dummy))))))
@@ -232,9 +233,9 @@ to send it over a network or to store it in a database etc.")
                              ))
           (maphash #'(lambda (key value)
                        (setq dummy
-			     (nconc dummy
-				    (list (marshal key circle-hash)
-					  (marshal value circle-hash)))))
+                             (nconc dummy
+                                    (list (marshal key circle-hash)
+                                          (marshal value circle-hash)))))
                    hash-table)
-	  (setq output (nconc output (list dummy)))))
+          (setq output (nconc output (list dummy)))))
     output))

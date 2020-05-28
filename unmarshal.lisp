@@ -28,8 +28,7 @@
 
 ;;; =============================================================
 (defgeneric unmarshal (thing)
-  (:documentation "Returns an object when called with a wellformed marshal sexp.")
-  )
+  (:documentation "Returns an object when called with a wellformed marshal sexp."))
 
 
 (defmethod unmarshal (thing)
@@ -39,13 +38,11 @@
               (unmarshal-fn (second thing) (first (third thing)) (third thing))
               (unmarshal-fn (second thing) t (third thing)))
           thing)
-      thing)
-  )
+      thing))
 
 
 
-(defgeneric unmarshal-fn (version type token &optional circle-hash)
-  )
+(defgeneric unmarshal-fn (version type token &optional circle-hash))
 
 
 (defmethod unmarshal-fn ((version (eql (coding-idiom :coding-release-no)))
@@ -67,8 +64,7 @@
               result))
         (progn
           (setq circle-hash (make-circle-hash))
-          (call-next-method version type token circle-hash))
-        )))
+          (call-next-method version type token circle-hash)))))
 
 (defmethod unmarshal-fn ((version (eql (coding-idiom :coding-release-no)))
                          (type (eql (coding-idiom :reference))) token &optional (circle-hash nil))
@@ -83,23 +79,19 @@
                          (type (eql (coding-idiom :object))) token &optional (circle-hash nil))
   (let* ((package    (find-package (fmt:object-package-name token)))
          (values     (fmt:class-slots-values  token))
-	 (class-out  (find-class (intern (symbol-name (fmt:object-class-name token))
-					 package)))
-	 (out        (allocate-instance class-out))
-	 (slots      (class-persistent-slots  out)))
+         (class-out  (find-class (intern (symbol-name (fmt:object-class-name token))
+                                         package)))
+         (out        (allocate-instance class-out))
+         (slots      (class-persistent-slots  out)))
 
     (setf (gethash (fmt:id token) circle-hash) out)
 
     (loop
-      for slot in slots
-      for value in values
-      do (if (listp value)
-             (setf (slot-value out slot)
-                   (unmarshal-fn version
-                                 (fmt:data-type value)
-                                 value
-                                 circle-hash))
-             (setf (slot-value out slot) (unmarshal-fn version t value circle-hash))))
+      for (slot value) on values by #'cddr
+      do (when (member slot slots)
+           (if (listp value)
+               (setf (slot-value out slot) (unmarshal-fn version (fmt:data-type value) value circle-hash))
+               (setf (slot-value out slot) (unmarshal-fn version t value circle-hash)))))
     (initialize-unmarshalled-instance out)))
 
 (defun token-reference-p (token)
@@ -113,8 +105,8 @@
 (defun second-pass-list (version token circle-hash &optional (max-depth 4))
   (when (> max-depth 0)
     (loop
-       for walker in token
-       for i from 0        do
+      for walker in token
+      for i from 0        do
          (cond
            ((and (utils:proper-list-p walker)
                  (token-reference-p walker))
@@ -139,15 +131,15 @@
         (local-circle-hash (make-circle-hash)))
     (setf (gethash (fmt:id token) circle-hash) out)
     (let ((first-pass (loop for walker in (fmt:list-values token) collect
-                           (if (listp walker)
-                               (progn
-                                 (setf (gethash (fmt:id walker) local-circle-hash)
-                                       (unmarshal-fn version
-                                                     (fmt:data-type walker)
-                                                     walker
-                                                     circle-hash))
-                                 (gethash (fmt:id walker) local-circle-hash))
-                               (unmarshal-fn version t walker circle-hash)))))
+                               (if (listp walker)
+                                   (progn
+                                     (setf (gethash (fmt:id walker) local-circle-hash)
+                                           (unmarshal-fn version
+                                                         (fmt:data-type walker)
+                                                         walker
+                                                         circle-hash))
+                                     (gethash (fmt:id walker) local-circle-hash))
+                                   (unmarshal-fn version t walker circle-hash)))))
       (if (not (token-reference-p token))
           (setf (gethash (fmt:id token) local-circle-hash) first-pass))
       (second-pass-list  version first-pass local-circle-hash))))
@@ -155,18 +147,18 @@
 (defmethod unmarshal-fn ((version (eql (coding-idiom :coding-release-no)))
                          (type (eql (coding-idiom :dlist))) token
                          &optional (circle-hash nil))
-    (let ((out (if (subseq token 2)
-                   +reference-placeholder+
-                   nil)))
-      (setf (gethash (fmt:id token) circle-hash) out)
-      (let* ((rest-liste (fmt:list-values token)))
-        (flet ((unmarshal-it (item)
-                 (if (listp item)
-                     (unmarshal-fn version (fmt:data-type item) item circle-hash)
-                     (unmarshal-fn version t item circle-hash))))
-          (cons (unmarshal-it (first rest-liste))
-                (first (loop for walker in (rest rest-liste)
-                          collect (unmarshal-it walker))))))))
+  (let ((out (if (subseq token 2)
+                 +reference-placeholder+
+                 nil)))
+    (setf (gethash (fmt:id token) circle-hash) out)
+    (let* ((rest-liste (fmt:list-values token)))
+      (flet ((unmarshal-it (item)
+               (if (listp item)
+                   (unmarshal-fn version (fmt:data-type item) item circle-hash)
+                   (unmarshal-fn version t item circle-hash))))
+        (cons (unmarshal-it (first rest-liste))
+              (first (loop for walker in (rest rest-liste)
+                           collect (unmarshal-it walker))))))))
 
 (defmethod unmarshal-fn ((version (eql (coding-idiom :coding-release-no)))
                          (type (eql (coding-idiom :circular-list))) token
@@ -182,7 +174,9 @@
 (defmethod unmarshal-fn ((version (eql (coding-idiom :coding-release-no)))
                          (type (eql (coding-idiom :array))) token &optional (circle-hash nil))
   (let ((out (make-array (fmt:array-sizes token)
-                         :element-type (fmt:array-elements-type token)))
+                         :element-type (fmt:array-elements-type token)
+                         :fill-pointer (fmt::array-fill-pointer token)
+                         :adjustable (fmt::array-adjustable token)))
         (elements (fmt:array-values token)))
 
     (setf (gethash (fmt:id token) circle-hash) out)
@@ -244,7 +238,6 @@
   (declare (ignore circle-hash))
   (fmt:simple-string-value token))
 
-; (unmarshal (marshal "huhu"))
 
 ;;;  04.01.99 cjo: strings
 (defmethod unmarshal-fn ((version (eql (coding-idiom :coding-release-no)))
