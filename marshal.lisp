@@ -89,20 +89,19 @@ to send it over a network or to store it in a database etc."))
     (if dummy
         (setq outlist (list (coding-idiom :reference) dummy))
         (progn
-          (when pslots
-            (setq dummy (genkey circle-hash))
-            (setvalue circle-hash object dummy)
-            (setf outlist (list (coding-idiom :object)
-                                dummy
-                                (class-name class)
-                                (intern (package-name (symbol-package (class-name class)))
-                                        :keyword)))
-            (dolist (walker pslots)
-              (setq outlist
-                    (nconc outlist
-                           (list walker
-                                 (marshal (slot-value object walker)
-                                          circle-hash))))))))
+          (setq dummy (genkey circle-hash))
+          (setvalue circle-hash object dummy)
+          (setf outlist (list (coding-idiom :object)
+                              dummy
+                              (class-name class)
+                              (intern (package-name (symbol-package (class-name class)))
+                                      :keyword)))
+          (dolist (walker pslots)
+            (setq outlist
+                  (nconc outlist
+                         (list walker
+                               (marshal (slot-value object walker)
+                                        circle-hash)))))))
     outlist))
 
 (defun %walk-list (sequence output ckey key-idiom circle-hash)
